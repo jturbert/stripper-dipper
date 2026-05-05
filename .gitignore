@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Secrets
+.env
+*.env
+
+# Local output (generated files — not committed, downloaded via Actions artifacts instead)
+output/
+
+# macOS
+.DS_Store

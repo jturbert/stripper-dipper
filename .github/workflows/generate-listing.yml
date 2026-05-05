@@ -1,0 +1,61 @@
+name: Generate Product Listing
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Manufacturer product page URL"
+        required: true
+        type: string
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      # rembg downloads the U2Net model (~170 MB) on first use.
+      # Caching it avoids re-downloading on every run.
+      - name: Cache rembg model
+        uses: actions/cache@v4
+        with:
+          path: ~/.u2net
+          key: rembg-u2net-v1
+
+      # Cache Playwright's Chromium binary between runs.
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ hashFiles('requirements.txt') }}
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install Playwright system dependencies + Chromium
+        run: playwright install --with-deps chromium
+
+      - name: Generate product listing
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # URL is passed via env var (not shell interpolation) to avoid injection
+          PRODUCT_URL: ${{ inputs.url }}
+        run: python main.py
+
+      - name: Upload listing as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          # artifact name includes run number so multiple runs don't overwrite
+          name: product-listing-${{ github.run_number }}
+          path: output/
+          retention-days: 90
+          if-no-files-found: warn
