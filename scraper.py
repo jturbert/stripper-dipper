@@ -22,11 +22,17 @@ async def scrape_product_page(url: str) -> dict:
         page = await context.new_page()
 
         try:
-            await page.goto(url, wait_until="networkidle", timeout=60_000)
-            await page.wait_for_timeout(2_000)  # let late JS settle
-        except Exception as e:
-            await browser.close()
-            raise RuntimeError(f"Failed to load page: {e}")
+            await page.goto(url, wait_until="load", timeout=60_000)
+        except Exception:
+            # Some pages never fire 'load' cleanly — try just waiting for the DOM
+            try:
+                await page.goto(url, wait_until="domcontentloaded", timeout=30_000)
+            except Exception as e:
+                await browser.close()
+                raise RuntimeError(f"Failed to load page: {e}")
+
+        # Let JS render after the initial load
+        await page.wait_for_timeout(3_000)
 
         # --- product name ---
         name = await _extract_name(page)
