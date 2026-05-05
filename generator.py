@@ -55,7 +55,7 @@ Additional page content:
 """
 
     message = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-5",
         max_tokens=1024,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_content}],
@@ -78,7 +78,7 @@ def generate_spec_tables(product_data: dict) -> tuple[str, str]:
         )
 
     message = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-5",
         max_tokens=4096,
         messages=[
             {
