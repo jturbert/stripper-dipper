@@ -39,25 +39,23 @@ def download_image(url: str) -> bytes | None:
 
 
 def process_image(raw_bytes: bytes) -> Image.Image:
-    """Remove background and pad to square with white background."""
-    input_img = Image.open(io.BytesIO(raw_bytes)).convert("RGBA")
-
+    """Remove background and pad to square with transparent background."""
     # Remove background
     output_bytes = remove(raw_bytes)
     no_bg = Image.open(io.BytesIO(output_bytes)).convert("RGBA")
 
-    # Pad to square
+    # Pad to square with transparency
     w, h = no_bg.size
     size = max(w, h)
-    padding = 20  # small border
+    padding = 20
     canvas_size = size + padding * 2
 
-    canvas = Image.new("RGBA", (canvas_size, canvas_size), (255, 255, 255, 255))
+    canvas = Image.new("RGBA", (canvas_size, canvas_size), (0, 0, 0, 0))
     paste_x = (canvas_size - w) // 2
     paste_y = (canvas_size - h) // 2
     canvas.paste(no_bg, (paste_x, paste_y), no_bg)
 
-    return canvas.convert("RGB")
+    return canvas
 
 
 def process_images(
