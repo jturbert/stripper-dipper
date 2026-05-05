@@ -9,9 +9,18 @@ Run with:
 import asyncio
 import io
 import json
+import logging
+import os
 import zipfile
 from pathlib import Path
 from uuid import uuid4
+
+logging.basicConfig(level=logging.INFO)
+_api_key = os.environ.get("ANTHROPIC_API_KEY")
+if _api_key:
+    logging.info(f"ANTHROPIC_API_KEY found (length={len(_api_key)})")
+else:
+    logging.warning("ANTHROPIC_API_KEY is NOT set — API calls will fail")
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
