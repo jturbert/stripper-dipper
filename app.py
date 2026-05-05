@@ -88,7 +88,7 @@ async def stream_events(job_id: str):
     async def _generate():
         while True:
             try:
-                event = await asyncio.wait_for(queue.get(), timeout=120.0)
+                event = await asyncio.wait_for(queue.get(), timeout=10.0)
             except asyncio.TimeoutError:
                 # Keep-alive ping so the connection doesn't drop
                 yield "data: " + json.dumps({"type": "ping"}) + "\n\n"
