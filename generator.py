@@ -2,6 +2,7 @@
 Calls the Anthropic API to generate product description and spec tables.
 """
 
+import os
 import anthropic
 
 SYSTEM_PROMPT = (
@@ -40,7 +41,7 @@ Specifications:
 
 
 def generate_description(product_data: dict) -> str:
-    client = anthropic.Anthropic()
+    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
     user_content = f"""Product Name: {product_data['name']}
 
@@ -63,7 +64,7 @@ Additional page content:
 
 
 def generate_spec_tables(product_data: dict) -> tuple[str, str]:
-    client = anthropic.Anthropic()
+    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
     if product_data["specs"]:
         specs_text = "\n".join(
