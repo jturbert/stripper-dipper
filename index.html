@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Product Listing Generator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* smooth transition for section reveals */
+    .fade-in { animation: fadeIn 0.25s ease-in; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+    /* log terminal cursor blink */
+    #log::after { content: '▋'; animation: blink 1s step-end infinite; }
+    #log.done::after { display: none; }
+    @keyframes blink { 50% { opacity: 0; } }
+  </style>
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-800">
+
+  <!-- Header -->
+  <header class="bg-white border-b border-slate-200 px-6 py-4">
+    <div class="max-w-3xl mx-auto flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white text-sm font-bold">P</div>
+      <h1 class="text-base font-semibold text-slate-800">Product Listing Generator</h1>
+    </div>
+  </header>
+
+  <main class="max-w-3xl mx-auto px-4 py-8 space-y-6">
+
+    <!-- URL Input -->
+    <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+      <label class="block text-sm font-medium text-slate-700 mb-3">
+        Manufacturer product page URL
+      </label>
+      <div class="flex gap-3">
+        <input
+          id="urlInput"
+          type="url"
+          placeholder="https://hifiman.com/products/detail/..."
+          class="flex-1 rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        />
+        <button
+          id="runBtn"
+          onclick="startJob()"
+          class="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white px-6 py-2.5 rounded-xl text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+        >
+          Generate listing
+        </button>
+      </div>
+    </section>
+
+    <!-- Progress -->
+    <section id="progressSection" class="hidden fade-in bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-sm font-semibold text-slate-700">Progress</h2>
+        <span id="spinner" class="inline-block w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></span>
+      </div>
+      <div
+        id="log"
+        class="bg-slate-900 rounded-xl px-4 py-3 font-mono text-xs text-emerald-400 leading-relaxed min-h-[120px] max-h-64 overflow-y-auto whitespace-pre-wrap"
+      ></div>
+    </section>
+
+    <!-- Results -->
+    <div id="resultsSection" class="hidden space-y-6 fade-in">
+
+      <!-- Product name -->
+      <h2 id="productHeading" class="text-xl font-bold text-slate-900 px-1"></h2>
+
+      <!-- Description -->
+      <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-semibold text-slate-800">Description</h3>
+          <button
+            onclick="copyText('descriptionText')"
+            class="text-xs text-blue-600 hover:text-blue-700 font-medium px-3 py-1 rounded-lg hover:bg-blue-50 transition-colors"
+            id="copyDescBtn"
+          >Copy</button>
+        </div>
+        <p id="descriptionText" class="text-sm text-slate-700 leading-relaxed"></p>
+      </section>
+
+      <!-- Spec Tables -->
+      <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-semibold text-slate-800">Spec tables</h3>
+          <button
+            onclick="copyActiveHtml()"
+            id="copyHtmlBtn"
+            class="text-xs text-blue-600 hover:text-blue-700 font-medium px-3 py-1 rounded-lg hover:bg-blue-50 transition-colors"
+          >Copy HTML</button>
+        </div>
+
+        <!-- Tab bar -->
+        <div class="flex gap-2 mb-4" id="tabBar">
+          <button id="tabShopify"   onclick="showTab('shopify')"   class="tab-btn">Shopify</button>
+          <button id="tabMailchimp" onclick="showTab('mailchimp')" class="tab-btn">Mailchimp</button>
+          <button id="tabSource"    onclick="showTab('source')"    class="tab-btn">HTML source</button>
+        </div>
+
+        <div id="paneShopify"   class="tab-pane border border-slate-200 rounded-xl p-4 overflow-auto max-h-[480px]"></div>
+        <div id="paneMailchimp" class="tab-pane hidden border border-slate-200 rounded-xl p-4 overflow-auto max-h-[480px]"></div>
+        <div id="paneSource"    class="tab-pane hidden border border-slate-200 rounded-xl p-4 overflow-auto max-h-[480px]">
+          <pre id="htmlSourceText" class="text-xs font-mono text-slate-600 whitespace-pre-wrap"></pre>
+        </div>
+      </section>
+
+      <!-- Images -->
+      <section id="imagesSection" class="hidden bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-semibold text-slate-800">Images</h3>
+          <a
+            id="downloadZipLink"
+            href="#"
+            class="text-xs text-blue-600 hover:text-blue-700 font-medium px-3 py-1 rounded-lg hover:bg-blue-50 transition-colors"
+          >Download ZIP</a>
+        </div>
+        <div id="imageGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3"></div>
+      </section>
+
+    </div>
+  </main>
+
+  <script>
+    // ---------------------------------------------------------------- state
+    let activeTab = 'shopify';
+    let results = null;
+
+    // ---------------------------------------------------------------- tabs
+    function showTab(tab) {
+      activeTab = tab;
+      ['shopify', 'mailchimp', 'source'].forEach(t => {
+        const btn = document.getElementById('tab' + cap(t));
+        const pane = document.getElementById('pane' + cap(t));
+        const active = t === tab;
+        btn.className = active
+          ? 'tab-btn bg-blue-600 text-white border-blue-600'
+          : 'tab-btn bg-white text-slate-600 border-slate-300 hover:bg-slate-50';
+        pane.classList.toggle('hidden', !active);
+      });
+
+      if (results) {
+        const htmlSource = tab === 'mailchimp' ? results.mailchimp_html : results.shopify_html;
+        document.getElementById('htmlSourceText').textContent = htmlSource;
+        document.getElementById('copyHtmlBtn').textContent =
+          tab === 'mailchimp' ? 'Copy Mailchimp HTML' :
+          tab === 'source'    ? 'Copy HTML' : 'Copy Shopify HTML';
+      }
+    }
+
+    function initTabs() {
+      ['shopify', 'mailchimp', 'source'].forEach(t => {
+        const btn = document.getElementById('tab' + cap(t));
+        btn.className = 'tab-btn border text-xs font-medium px-4 py-1.5 rounded-full transition-colors';
+      });
+      showTab('shopify');
+    }
+
+    // ---------------------------------------------------------------- job
+    async function startJob() {
+      const url = document.getElementById('urlInput').value.trim();
+      if (!url) { document.getElementById('urlInput').focus(); return; }
+
+      // reset
+      document.getElementById('runBtn').disabled = true;
+      document.getElementById('resultsSection').classList.add('hidden');
+      document.getElementById('progressSection').classList.remove('hidden');
+      document.getElementById('progressSection').classList.add('fade-in');
+      document.getElementById('log').textContent = '';
+      document.getElementById('log').classList.remove('done');
+      document.getElementById('spinner').classList.remove('hidden');
+
+      let resp;
+      try {
+        resp = await fetch('/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url }),
+        });
+      } catch (e) {
+        appendLog('Network error: ' + e.message);
+        finish();
+        return;
+      }
+
+      const body = await resp.json();
+      if (!resp.ok) {
+        appendLog('Error: ' + (body.detail || 'Unknown error'));
+        finish();
+        return;
+      }
+
+      const es = new EventSource(`/stream/${body.job_id}`);
+
+      es.onmessage = (e) => {
+        const data = JSON.parse(e.data);
+        if (data.type === 'ping') return;
+        if (data.type === 'log') {
+          appendLog(data.msg);
+        } else if (data.type === 'results') {
+          es.close();
+          showResults(data.data);
+          finish();
+        } else if (data.type === 'error') {
+          appendLog('\nERROR: ' + data.msg);
+          es.close();
+          finish();
+        } else if (data.type === 'done') {
+          es.close();
+          finish();
+        }
+      };
+
+      es.onerror = () => {
+        appendLog('\nConnection lost.');
+        es.close();
+        finish();
+      };
+    }
+
+    function finish() {
+      document.getElementById('runBtn').disabled = false;
+      document.getElementById('spinner').classList.add('hidden');
+      document.getElementById('log').classList.add('done');
+    }
+
+    function appendLog(msg) {
+      const el = document.getElementById('log');
+      el.textContent += msg + '\n';
+      el.scrollTop = el.scrollHeight;
+    }
+
+    // ---------------------------------------------------------------- results
+    function showResults(data) {
+      results = data;
+
+      document.getElementById('productHeading').textContent = data.name;
+      document.getElementById('descriptionText').textContent = data.description;
+
+      document.getElementById('paneShopify').innerHTML   = data.shopify_html;
+      document.getElementById('paneMailchimp').innerHTML = data.mailchimp_html;
+      document.getElementById('htmlSourceText').textContent = data.shopify_html;
+
+      document.getElementById('downloadZipLink').href = `/download/${data.slug}`;
+
+      // images
+      const grid = document.getElementById('imageGrid');
+      grid.innerHTML = '';
+      for (const imgPath of data.image_paths) {
+        const src = '/' + imgPath;
+        const filename = imgPath.split('/').pop();
+
+        const a = document.createElement('a');
+        a.href = src;
+        a.download = filename;
+        a.title = filename;
+        a.className = [
+          'group block rounded-xl overflow-hidden border border-slate-200',
+          'hover:border-blue-400 transition-colors relative bg-slate-50',
+        ].join(' ');
+
+        const img = document.createElement('img');
+        img.src = src;
+        img.alt = filename;
+        img.className = 'w-full aspect-square object-contain p-2';
+        a.appendChild(img);
+
+        // hover label
+        const label = document.createElement('div');
+        label.textContent = '↓ ' + filename;
+        label.className = [
+          'absolute bottom-0 inset-x-0 bg-slate-900/70 text-white text-[10px] font-mono',
+          'px-2 py-1 truncate opacity-0 group-hover:opacity-100 transition-opacity',
+        ].join(' ');
+        a.appendChild(label);
+
+        grid.appendChild(a);
+      }
+
+      const hasImages = data.image_paths.length > 0;
+      document.getElementById('imagesSection').classList.toggle('hidden', !hasImages);
+
+      initTabs();
+      const rs = document.getElementById('resultsSection');
+      rs.classList.remove('hidden');
+      rs.classList.add('fade-in');
+      rs.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // ---------------------------------------------------------------- copy
+    function copyText(id) {
+      navigator.clipboard.writeText(document.getElementById(id).textContent);
+      flash('copyDescBtn', 'Copied!');
+    }
+
+    function copyActiveHtml() {
+      if (!results) return;
+      const html = activeTab === 'mailchimp' ? results.mailchimp_html : results.shopify_html;
+      navigator.clipboard.writeText(html);
+      flash('copyHtmlBtn', 'Copied!');
+    }
+
+    function flash(btnId, msg) {
+      const btn = document.getElementById(btnId);
+      const orig = btn.textContent;
+      btn.textContent = msg;
+      btn.classList.add('text-green-600');
+      btn.classList.remove('text-blue-600');
+      setTimeout(() => {
+        btn.textContent = orig;
+        btn.classList.remove('text-green-600');
+        btn.classList.add('text-blue-600');
+      }, 1500);
+    }
+
+    // ---------------------------------------------------------------- utils
+    function cap(s) { return s[0].toUpperCase() + s.slice(1); }
+
+    // enter key submits
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('urlInput').addEventListener('keydown', e => {
+        if (e.key === 'Enter') startJob();
+      });
+    });
+  </script>
+</body>
+</html>
