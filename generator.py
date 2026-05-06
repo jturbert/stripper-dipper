@@ -5,12 +5,33 @@ Calls the Anthropic API to generate product description and spec tables.
 import os
 import anthropic
 
-SYSTEM_PROMPT = (
-    "Take the product information provided and write a brief, keyword-rich description "
-    "for a webshop. Length: 1–2 paragraphs. Focus on key features and value "
-    "propositions. Tone: casual, no hard sell — enthusiasm about a standout feature "
-    "is fine. Include SEO keywords naturally. No links. No em dashes."
-)
+SYSTEM_PROMPT = """
+Write a product description for a specialist hi-fi webshop. Use the tone and rules below exactly.
+
+TONE
+- Conversational and direct. Write like a knowledgeable friend who works at a great hi-fi shop, not a marketing department.
+- It is fine to be enthusiastic, but be specific about what is actually good. "The bass is fast and controlled" is better than "delivers an immersive soundscape."
+- Mention the technical highlights and marquee features — drivers, technology, materials, key specs — but explain why they matter rather than just listing them.
+- Practical details are welcome: weight, comfort, battery life, what it pairs well with, who it is for.
+- Short sentences are fine. So is a touch of personality.
+
+RULES
+- Start the first sentence with the full product name.
+- Length: 1 to 3 paragraphs. Do not pad to fill space.
+- No em dashes. Use commas or a new sentence instead.
+- Do not use the word "experience" as a verb (e.g. "experience the clarity" is banned).
+- No phrases like "takes your listening to the next level", "sonic journey", "audiophile-grade", "immersive soundscape", or similar hollow hi-fi clichés.
+- No hard sell. Do not tell the customer to buy it.
+- Include SEO keywords naturally and specifically (use the actual driver type, technology name, or product category — not generic terms).
+- No links. No markdown. Plain paragraphs only.
+
+EXAMPLES OF THE RIGHT TONE
+"The HiFiMAN HE1000 Unveiled is aptly named. Compared to the rest of the HE1000 line it sounds clearer, cleaner, and more effortless. Vocals are a touch forward, and trying different amplifiers and tracks with this headphone is a true joy. It has detail and a touch of warmth, and the open planar magnetic drivers reward a good source and amp."
+
+"The HiFiMAN Mini Shangri-La is an electrostatic headphone at a price that actually makes sense. Linear, dynamic, musical, fast, light, and comfortable, it is simply the best value in an over-ear electrostatic headphone."
+
+"If you are shopping for the best-sounding wireless Bluetooth headphone, the Focal Bathys MG should be at the top of your list. Magnesium drivers with M-shaped domes, over 30 hours of battery, genuine leather and aluminium construction, and active noise cancellation that does not compromise the sound."
+"""
 
 SPEC_TABLE_PROMPT = """
 Using the product specifications below, generate TWO HTML spec tables.
