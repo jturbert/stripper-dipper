@@ -28,10 +28,14 @@ def main():
 
     print()
     try:
-        results = asyncio.run(run_pipeline(url, print))
+        results = asyncio.run(run_pipeline(url, print, max_images=50))
     except RuntimeError as e:
         print(f"Error: {e}")
         sys.exit(1)
+
+    # Write slug to file so GitHub Actions can use it for the artifact name
+    with open("product_slug.txt", "w") as f:
+        f.write(results["slug"])
 
     print()
     print("=" * 50)

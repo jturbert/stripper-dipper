@@ -51,11 +51,14 @@ jobs:
           PRODUCT_URL: ${{ inputs.url }}
         run: python main.py
 
+      - name: Read product slug
+        id: slug
+        run: echo "name=$(cat product_slug.txt)" >> $GITHUB_OUTPUT
+
       - name: Upload listing as artifact
         uses: actions/upload-artifact@v4
         with:
-          # artifact name includes run number so multiple runs don't overwrite
-          name: product-listing-${{ github.run_number }}
+          name: product-listing-${{ steps.slug.outputs.name }}
           path: output/
           retention-days: 90
           if-no-files-found: warn
