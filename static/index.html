@@ -40,6 +40,17 @@
           placeholder="https://hifiman.com/products/detail/..."
           class="flex-1 rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
+        <select
+          id="maxImages"
+          class="rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-slate-700"
+          title="Max images to process"
+        >
+          <option value="1">1 image</option>
+          <option value="2">2 images</option>
+          <option value="3">3 images</option>
+          <option value="5" selected>5 images</option>
+          <option value="8">8 images</option>
+        </select>
         <button
           id="runBtn"
           onclick="startJob()"
@@ -193,7 +204,7 @@
         resp = await fetch('/run', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url }),
+          body: JSON.stringify({ url, max_images: parseInt(document.getElementById('maxImages').value) }),
         });
       } catch (e) {
         appendLog('Network error: ' + e.message);

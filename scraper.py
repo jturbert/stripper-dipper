@@ -179,45 +179,88 @@ async def _extract_specs(page) -> list[dict]:
 async def _extract_images(page, base_url: str) -> list[str]:
     domain = urlparse(base_url).netloc
     seen: set[str] = set()
-    images: list[str] = []
 
-    img_srcs = await page.eval_on_selector_all(
-        "img",
-        """els => els.map(el => ({
-            src: el.src || '',
-            dataSrc: el.dataset.src || '',
-            width: el.naturalWidth || el.width || 0,
-            height: el.naturalHeight || el.height || 0,
-        }))""",
-    )
+    def _collect(img_list: list[dict]) -> list[str]:
+        results = []
+        for img in img_list:
+            src = img.get("dataSrc") or img.get("src") or ""
+            if not src or src.startswith("data:"):
+                continue
+            abs_url = urljoin(base_url, src)
+            w, h = img.get("width", 0), img.get("height", 0)
+            if w and h and (w < 150 or h < 150):
+                continue
+            if abs_url not in seen:
+                seen.add(abs_url)
+                results.append(abs_url)
+        return results
 
-    for img in img_srcs:
-        src = img.get("dataSrc") or img.get("src") or ""
-        if not src or src.startswith("data:"):
+    js = """(sel) => [...document.querySelectorAll(sel)].map(el => ({
+        src: el.src || el.getAttribute('data-src') || '',
+        dataSrc: el.dataset.src || el.dataset.lazySrc || '',
+        width: el.naturalWidth || el.width || 0,
+        height: el.naturalHeight || el.height || 0,
+    }))"""
+
+    # Strategy 1: images inside recognised product gallery containers
+    gallery_selectors = [
+        "[class*='product-gallery'] img",
+        "[class*='product-image'] img",
+        "[class*='product-media'] img",
+        "[class*='product-photo'] img",
+        "[class*='media-gallery'] img",
+        "[class*='image-gallery'] img",
+        "[class*='product-images'] img",
+        "[class*='gallery-viewer'] img",
+        "[id*='product-gallery'] img",
+        "[id*='product-images'] img",
+        "[class*='swiper-slide'] img",
+        "[class*='slick-slide'] img",
+        "[class*='carousel-item'] img",
+        "figure.product img",
+        ".product__media img",
+    ]
+    gallery_images: list[str] = []
+    for sel in gallery_selectors:
+        try:
+            imgs = await page.evaluate(f"() => ({js})('{sel}')")
+            gallery_images.extend(_collect(imgs))
+        except Exception:
             continue
-        abs_url = urljoin(base_url, src)
-        # filter tiny icons / tracking pixels
-        w, h = img.get("width", 0), img.get("height", 0)
-        if w and h and (w < 100 or h < 100):
-            continue
-        if abs_url not in seen:
-            seen.add(abs_url)
-            images.append(abs_url)
+        if len(gallery_images) >= 2:
+            break
 
-    # Also grab srcset sources
-    srcsets = await page.eval_on_selector_all(
-        "img[srcset], source[srcset]",
-        "els => els.map(el => el.srcset)",
-    )
-    for srcset in srcsets:
-        for part in srcset.split(","):
-            src = part.strip().split()[0]
-            if src:
-                abs_url = urljoin(base_url, src)
+    if len(gallery_images) >= 2:
+        return gallery_images
+
+    # Strategy 2: all page images, filtered by size and domain
+    try:
+        all_imgs = await page.evaluate(f"() => ({js})('img')")
+        all_images = _collect(all_imgs)
+    except Exception:
+        all_images = []
+
+    # Also pick largest srcset variant for each img
+    try:
+        srcsets = await page.eval_on_selector_all(
+            "img[srcset], source[srcset]",
+            "els => els.map(el => el.srcset)",
+        )
+        for srcset in srcsets:
+            parts = [p.strip().split() for p in srcset.split(",") if p.strip()]
+            # pick the widest declared size
+            best = max(parts, key=lambda p: int(p[1].rstrip("w")) if len(p) > 1 and p[1].endswith("w") else 0, default=None)
+            if best:
+                abs_url = urljoin(base_url, best[0])
                 if abs_url not in seen:
                     seen.add(abs_url)
-                    images.append(abs_url)
+                    all_images.append(abs_url)
+    except Exception:
+        pass
 
-    # Prefer product-domain images, deprioritise CDN-only if there are enough
-    product_images = [u for u in images if domain in u or "product" in u.lower()]
-    return product_images if product_images else images
+    # Prefer same-domain images with product-related path segments
+    product_images = [
+        u for u in all_images
+        if domain in u and any(k in u.lower() for k in ("product", "shop", "item", "catalog", "cdn"))
+    ]
+    return product_images if len(product_images) >= 2 else all_images

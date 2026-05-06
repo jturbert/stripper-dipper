@@ -25,7 +25,7 @@ def _wrap_html(table_html: str, title: str) -> str:
 """
 
 
-async def run_pipeline(url: str, log) -> dict:
+async def run_pipeline(url: str, log, *, max_images: int = 5) -> dict:
     loop = asyncio.get_running_loop()
 
     # thread_log: safe to call from worker threads spawned by to_thread
@@ -73,7 +73,7 @@ async def run_pipeline(url: str, log) -> dict:
     # -------------------------------------------------------- process images
     saved_paths: list[Path] = []
     if product["image_urls"]:
-        n = min(len(product["image_urls"]), 10)
+        n = min(len(product["image_urls"]), max_images)
         log(f"Processing {n} image(s) ...")
         saved_paths = await asyncio.to_thread(
             process_images,
@@ -81,7 +81,7 @@ async def run_pipeline(url: str, log) -> dict:
             product["name"],
             output_dir,
             on_progress=thread_log,
-            max_images=10,
+            max_images=max_images,
         )
         log(f"Images done. {len(saved_paths)} saved.")
     else:

@@ -43,6 +43,7 @@ jobs: dict[str, dict] = {}
 
 class RunRequest(BaseModel):
     url: str
+    max_images: int = 5
 
 
 # ------------------------------------------------------------------ routes
@@ -67,7 +68,7 @@ async def start_run(req: RunRequest):
             queue.put_nowait({"type": "log", "msg": msg})
 
         try:
-            results = await run_pipeline(url, log)
+            results = await run_pipeline(url, log, max_images=req.max_images)
             queue.put_nowait({"type": "results", "data": results})
         except Exception as e:
             queue.put_nowait({"type": "error", "msg": str(e)})
