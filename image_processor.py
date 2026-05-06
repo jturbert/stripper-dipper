@@ -2,6 +2,7 @@
 Downloads product images, removes backgrounds, pads to square, saves as PNG.
 """
 
+import gc
 import io
 import re
 import urllib.request
@@ -10,6 +11,10 @@ from pathlib import Path
 
 from PIL import Image
 from rembg import remove
+
+# Downscale images to this max dimension before rembg processing.
+# rembg quality is near-identical at 1200px vs 3000px, but memory use drops ~6x.
+MAX_PROCESS_DIM = 1200
 
 
 def slugify(text: str) -> str:
@@ -38,13 +43,30 @@ def download_image(url: str) -> bytes | None:
         return None
 
 
-def process_image(raw_bytes: bytes) -> Image.Image:
-    """Remove background and pad to square with transparent background."""
-    # Remove background
-    output_bytes = remove(raw_bytes)
-    no_bg = Image.open(io.BytesIO(output_bytes)).convert("RGBA")
+def _downscale(img: Image.Image, max_dim: int) -> Image.Image:
+    w, h = img.size
+    if max(w, h) <= max_dim:
+        return img
+    scale = max_dim / max(w, h)
+    return img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
 
-    # Pad to square with transparency
+
+def process_image(raw_bytes: bytes) -> Image.Image:
+    """Remove background, pad to square with transparent background."""
+    # Downscale before rembg to keep memory usage low
+    img = Image.open(io.BytesIO(raw_bytes)).convert("RGBA")
+    img = _downscale(img, MAX_PROCESS_DIM)
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    del img
+
+    output_bytes = remove(buf.getvalue())
+    del buf
+
+    no_bg = Image.open(io.BytesIO(output_bytes)).convert("RGBA")
+    del output_bytes
+
     w, h = no_bg.size
     size = max(w, h)
     padding = 20
@@ -54,6 +76,7 @@ def process_image(raw_bytes: bytes) -> Image.Image:
     paste_x = (canvas_size - w) // 2
     paste_y = (canvas_size - h) // 2
     canvas.paste(no_bg, (paste_x, paste_y), no_bg)
+    del no_bg
 
     return canvas
 
@@ -66,11 +89,7 @@ def process_images(
     *,
     max_images: int = 10,
 ) -> list[Path]:
-    """Download, process, and save product images. Returns saved paths.
-
-    on_progress: optional callable(str) for progress messages — used by the
-    web pipeline to stream updates; falls back to print when None.
-    """
+    """Download, process, and save product images. Returns saved paths."""
     log = on_progress or print
 
     images_dir = output_dir / "images"
@@ -101,13 +120,19 @@ def process_images(
         except Exception as e:
             log(f"[warn] Background removal failed: {e}. Saving original.")
             try:
-                processed = Image.open(io.BytesIO(raw)).convert("RGB")
+                processed = Image.open(io.BytesIO(raw)).convert("RGBA")
             except Exception:
                 continue
+        finally:
+            del raw
+            gc.collect()
 
         filename = f"{slug}-{count + 1:02d}.png"
         out_path = images_dir / filename
         processed.save(out_path, "PNG", optimize=True)
+        del processed
+        gc.collect()
+
         saved.append(out_path)
         count += 1
         log(f"Saved: {filename}")

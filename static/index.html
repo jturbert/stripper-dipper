@@ -106,6 +106,23 @@
         </div>
       </section>
 
+      <!-- Meta Description -->
+      <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <h3 class="font-semibold text-slate-800">Google meta description</h3>
+            <p class="text-xs text-slate-400 mt-0.5">150 characters max · used in search results</p>
+          </div>
+          <button
+            onclick="copyMeta()"
+            id="copyMetaBtn"
+            class="text-xs text-blue-600 hover:text-blue-700 font-medium px-3 py-1 rounded-lg hover:bg-blue-50 transition-colors"
+          >Copy</button>
+        </div>
+        <p id="metaText" class="text-sm text-slate-700 leading-relaxed border border-slate-200 rounded-xl px-4 py-3 bg-slate-50"></p>
+        <p id="metaCount" class="text-xs text-slate-400 mt-2 text-right"></p>
+      </section>
+
       <!-- Images -->
       <section id="imagesSection" class="hidden bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
         <div class="flex items-center justify-between mb-4">
@@ -238,6 +255,10 @@
       document.getElementById('productHeading').textContent = data.name;
       document.getElementById('descriptionText').textContent = data.description;
 
+      const meta = data.meta_description || '';
+      document.getElementById('metaText').textContent = meta;
+      document.getElementById('metaCount').textContent = `${meta.length} / 150 characters`;
+
       document.getElementById('paneShopify').innerHTML   = data.shopify_html;
       document.getElementById('paneMailchimp').innerHTML = data.mailchimp_html;
       document.getElementById('htmlSourceText').textContent = data.shopify_html;
@@ -292,6 +313,12 @@
     function copyText(id) {
       navigator.clipboard.writeText(document.getElementById(id).textContent);
       flash('copyDescBtn', 'Copied!');
+    }
+
+    function copyMeta() {
+      if (!results) return;
+      navigator.clipboard.writeText(results.meta_description || '');
+      flash('copyMetaBtn', 'Copied!');
     }
 
     function copyActiveHtml() {

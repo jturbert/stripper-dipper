@@ -48,19 +48,20 @@ async def run_pipeline(url: str, log) -> dict:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # --------------------------------------------------- generate via Claude
-    def _generate() -> tuple[str, str, str]:
+    def _generate() -> tuple[str, str, str, str]:
         thread_log("Generating description ...")
-        desc = generate_description(product)
+        desc, meta = generate_description(product)
         thread_log("Description done.")
         thread_log("Generating spec tables ...")
         shopify, mailchimp = generate_spec_tables(product)
         thread_log("Spec tables done.")
-        return desc, shopify, mailchimp
+        return desc, meta, shopify, mailchimp
 
-    description, shopify_html, mailchimp_html = await asyncio.to_thread(_generate)
+    description, meta_description, shopify_html, mailchimp_html = await asyncio.to_thread(_generate)
 
     (output_dir / "description.md").write_text(
-        f"# {product['name']}\n\n{description}\n", encoding="utf-8"
+        f"# {product['name']}\n\n{description}\n\n---\n\n**Meta description:**\n{meta_description}\n",
+        encoding="utf-8",
     )
     (output_dir / "specs-shopify.html").write_text(
         _wrap_html(shopify_html, "Shopify Specs"), encoding="utf-8"
@@ -91,6 +92,7 @@ async def run_pipeline(url: str, log) -> dict:
         "name": product["name"],
         "slug": slug,
         "description": description,
+        "meta_description": meta_description,
         "shopify_html": shopify_html,
         "mailchimp_html": mailchimp_html,
         "image_paths": [str(p).replace("\\", "/") for p in saved_paths],
