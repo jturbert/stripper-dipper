@@ -7,6 +7,7 @@ import io
 import re
 import urllib.request
 import urllib.error
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from PIL import Image
@@ -83,6 +84,42 @@ def process_image(raw_bytes: bytes) -> Image.Image:
     return canvas
 
 
+def _process_one(args) -> tuple[int, Path | None]:
+    url, slug, images_dir, idx, log = args
+    log(f"Downloading image {idx + 1}: {url[:80]}...")
+    raw = download_image(url)
+    if raw is None:
+        return idx, None
+
+    try:
+        Image.open(io.BytesIO(raw)).verify()
+    except Exception:
+        log(f"[warn] Image {idx + 1} is not valid, skipping.")
+        return idx, None
+
+    log(f"Removing background from image {idx + 1}...")
+    try:
+        processed = process_image(raw)
+    except Exception as e:
+        log(f"[warn] Background removal failed for image {idx + 1}: {e}. Saving original.")
+        try:
+            processed = Image.open(io.BytesIO(raw)).convert("RGBA")
+        except Exception:
+            return idx, None
+    finally:
+        del raw
+        gc.collect()
+
+    filename = f"{slug}-{idx + 1:02d}.png"
+    out_path = images_dir / filename
+    processed.save(out_path, "PNG", optimize=True)
+    del processed
+    gc.collect()
+
+    log(f"Saved: {filename}")
+    return idx, out_path
+
+
 def process_images(
     image_urls: list[str],
     product_name: str,
@@ -98,45 +135,15 @@ def process_images(
     images_dir.mkdir(parents=True, exist_ok=True)
 
     slug = slugify(product_name)
-    saved: list[Path] = []
-    count = 0
+    urls = image_urls[:max_images]
 
-    for url in image_urls:
-        if count >= max_images:
-            break
+    args = [(url, slug, images_dir, idx, log) for idx, url in enumerate(urls)]
 
-        log(f"Downloading image {count + 1}: {url[:80]}...")
-        raw = download_image(url)
-        if raw is None:
-            continue
+    results: list[tuple[int, Path | None]] = []
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(_process_one, args))
 
-        try:
-            Image.open(io.BytesIO(raw)).verify()
-        except Exception:
-            log("[warn] Not a valid image, skipping.")
-            continue
-
-        log("Removing background...")
-        try:
-            processed = process_image(raw)
-        except Exception as e:
-            log(f"[warn] Background removal failed: {e}. Saving original.")
-            try:
-                processed = Image.open(io.BytesIO(raw)).convert("RGBA")
-            except Exception:
-                continue
-        finally:
-            del raw
-            gc.collect()
-
-        filename = f"{slug}-{count + 1:02d}.png"
-        out_path = images_dir / filename
-        processed.save(out_path, "PNG", optimize=True)
-        del processed
-        gc.collect()
-
-        saved.append(out_path)
-        count += 1
-        log(f"Saved: {filename}")
+    # Return paths in original order, excluding failures
+    saved = [path for _, path in sorted(results) if path is not None]
 
     return saved

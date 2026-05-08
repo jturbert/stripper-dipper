@@ -7,6 +7,7 @@ log: callable(str) — receives progress messages.
 """
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from generator import generate_description, generate_spec_tables
@@ -47,17 +48,26 @@ async def run_pipeline(url: str, log, *, max_images: int = 5) -> dict:
     output_dir = Path("output") / slug
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # --------------------------------------------------- generate via Claude
-    def _generate() -> tuple[str, str, str, str]:
+    # --------------------------------------------------- generate via Claude (parallel)
+    def _gen_description():
         thread_log("Generating description ...")
-        desc, meta = generate_description(product)
+        result = generate_description(product)
         thread_log("Description done.")
-        thread_log("Generating spec tables ...")
-        shopify, mailchimp = generate_spec_tables(product)
-        thread_log("Spec tables done.")
-        return desc, meta, shopify, mailchimp
+        return result
 
-    description, meta_description, shopify_html, mailchimp_html = await asyncio.to_thread(_generate)
+    def _gen_tables():
+        thread_log("Generating spec tables ...")
+        result = generate_spec_tables(product)
+        thread_log("Spec tables done.")
+        return result
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        loop = asyncio.get_running_loop()
+        desc_future = loop.run_in_executor(pool, _gen_description)
+        tables_future = loop.run_in_executor(pool, _gen_tables)
+        (description, meta_description), (shopify_html, mailchimp_html) = await asyncio.gather(
+            desc_future, tables_future
+        )
 
     (output_dir / "description.md").write_text(
         f"# {product['name']}\n\n{description}\n\n---\n\n**Meta description:**\n{meta_description}\n",
