@@ -7,7 +7,6 @@ import io
 import re
 import urllib.request
 import urllib.error
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from PIL import Image
@@ -17,7 +16,9 @@ from rembg import remove, new_session
 # rembg quality is near-identical at 1200px vs 3000px, but memory use drops ~6x.
 MAX_PROCESS_DIM = 1200
 
-# Loaded lazily on first use so Playwright can scrape without memory contention
+# Loaded lazily on first use so Playwright can scrape without memory contention.
+# onnxruntime sessions are not safe for concurrent inference, so we keep one
+# session and process images sequentially.
 _session = None
 
 
@@ -64,7 +65,6 @@ def _downscale(img: Image.Image, max_dim: int) -> Image.Image:
 
 def process_image(raw_bytes: bytes) -> Image.Image:
     """Remove background, pad to square with transparent background."""
-    # Downscale before rembg to keep memory usage low
     img = Image.open(io.BytesIO(raw_bytes)).convert("RGBA")
     img = _downscale(img, MAX_PROCESS_DIM)
 
@@ -92,42 +92,6 @@ def process_image(raw_bytes: bytes) -> Image.Image:
     return canvas
 
 
-def _process_one(args) -> tuple[int, Path | None]:
-    url, slug, images_dir, idx, log = args
-    log(f"Downloading image {idx + 1}: {url[:80]}...")
-    raw = download_image(url)
-    if raw is None:
-        return idx, None
-
-    try:
-        Image.open(io.BytesIO(raw)).verify()
-    except Exception:
-        log(f"[warn] Image {idx + 1} is not valid, skipping.")
-        return idx, None
-
-    log(f"Removing background from image {idx + 1}...")
-    try:
-        processed = process_image(raw)
-    except Exception as e:
-        log(f"[warn] Background removal failed for image {idx + 1}: {e}. Saving original.")
-        try:
-            processed = Image.open(io.BytesIO(raw)).convert("RGBA")
-        except Exception:
-            return idx, None
-    finally:
-        del raw
-        gc.collect()
-
-    filename = f"{slug}-{idx + 1:02d}.png"
-    out_path = images_dir / filename
-    processed.save(out_path, "PNG", optimize=True)
-    del processed
-    gc.collect()
-
-    log(f"Saved: {filename}")
-    return idx, out_path
-
-
 def process_images(
     image_urls: list[str],
     product_name: str,
@@ -143,15 +107,45 @@ def process_images(
     images_dir.mkdir(parents=True, exist_ok=True)
 
     slug = slugify(product_name)
-    urls = image_urls[:max_images]
+    saved: list[Path] = []
+    count = 0
 
-    args = [(url, slug, images_dir, idx, log) for idx, url in enumerate(urls)]
+    for url in image_urls:
+        if count >= max_images:
+            break
 
-    results: list[tuple[int, Path | None]] = []
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        results = list(pool.map(_process_one, args))
+        log(f"Downloading image {count + 1}: {url[:80]}...")
+        raw = download_image(url)
+        if raw is None:
+            continue
 
-    # Return paths in original order, excluding failures
-    saved = [path for _, path in sorted(results) if path is not None]
+        try:
+            Image.open(io.BytesIO(raw)).verify()
+        except Exception:
+            log("[warn] Not a valid image, skipping.")
+            continue
+
+        log(f"Removing background from image {count + 1}...")
+        try:
+            processed = process_image(raw)
+        except Exception as e:
+            log(f"[warn] Background removal failed: {e}. Saving original.")
+            try:
+                processed = Image.open(io.BytesIO(raw)).convert("RGBA")
+            except Exception:
+                continue
+        finally:
+            del raw
+            gc.collect()
+
+        filename = f"{slug}-{count + 1:02d}.png"
+        out_path = images_dir / filename
+        processed.save(out_path, "PNG", optimize=True)
+        del processed
+        gc.collect()
+
+        saved.append(out_path)
+        count += 1
+        log(f"Saved: {filename}")
 
     return saved
