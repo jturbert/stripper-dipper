@@ -17,7 +17,15 @@ from rembg import remove, new_session
 # rembg quality is near-identical at 1200px vs 3000px, but memory use drops ~6x.
 MAX_PROCESS_DIM = 1200
 
-_session = new_session("birefnet-general")
+# Loaded lazily on first use so Playwright can scrape without memory contention
+_session = None
+
+
+def _get_session():
+    global _session
+    if _session is None:
+        _session = new_session("birefnet-general")
+    return _session
 
 
 def slugify(text: str) -> str:
@@ -64,7 +72,7 @@ def process_image(raw_bytes: bytes) -> Image.Image:
     img.save(buf, format="PNG")
     del img
 
-    output_bytes = remove(buf.getvalue(), session=_session)
+    output_bytes = remove(buf.getvalue(), session=_get_session())
     del buf
 
     no_bg = Image.open(io.BytesIO(output_bytes)).convert("RGBA")
