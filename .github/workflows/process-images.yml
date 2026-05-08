@@ -1,4 +1,4 @@
-name: Generate Product Listing
+name: Process Images Only
 
 on:
   workflow_dispatch:
@@ -26,8 +26,6 @@ jobs:
           python-version: "3.11"
           cache: "pip"
 
-      # rembg downloads the U2Net model (~170 MB) on first use.
-      # Caching it avoids re-downloading on every run.
       - name: Cache rembg model
         uses: actions/cache@v4
         with:
@@ -36,7 +34,6 @@ jobs:
             ~/.cache/huggingface
           key: rembg-birefnet-v1
 
-      # Cache Playwright's Chromium binary between runs.
       - name: Cache Playwright browsers
         uses: actions/cache@v4
         with:
@@ -49,21 +46,19 @@ jobs:
       - name: Install Playwright system dependencies + Chromium
         run: playwright install --with-deps chromium
 
-      - name: Generate product listing
+      - name: Process images
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          # URL is passed via env var (not shell interpolation) to avoid injection
           PRODUCT_URL: ${{ inputs.url }}
-        run: python main.py
+        run: python images_only.py
 
       - name: Read product slug
         id: slug
         run: echo "name=$(cat product_slug.txt)" >> $GITHUB_OUTPUT
 
-      - name: Upload listing as artifact
+      - name: Upload images as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: product-listing-${{ steps.slug.outputs.name }}
+          name: images-${{ steps.slug.outputs.name }}
           path: output/
           retention-days: 90
           if-no-files-found: warn
