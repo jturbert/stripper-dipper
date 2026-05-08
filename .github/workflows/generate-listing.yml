@@ -31,8 +31,10 @@ jobs:
       - name: Cache rembg model
         uses: actions/cache@v4
         with:
-          path: ~/.u2net
-          key: rembg-u2net-v1
+          path: |
+            ~/.u2net
+            ~/.cache/huggingface
+          key: rembg-birefnet-v1
 
       # Cache Playwright's Chromium binary between runs.
       - name: Cache Playwright browsers

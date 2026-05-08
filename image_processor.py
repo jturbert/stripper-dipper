@@ -10,11 +10,13 @@ import urllib.error
 from pathlib import Path
 
 from PIL import Image
-from rembg import remove
+from rembg import remove, new_session
 
 # Downscale images to this max dimension before rembg processing.
 # rembg quality is near-identical at 1200px vs 3000px, but memory use drops ~6x.
 MAX_PROCESS_DIM = 1200
+
+_session = new_session("birefnet-general")
 
 
 def slugify(text: str) -> str:
@@ -61,7 +63,7 @@ def process_image(raw_bytes: bytes) -> Image.Image:
     img.save(buf, format="PNG")
     del img
 
-    output_bytes = remove(buf.getvalue())
+    output_bytes = remove(buf.getvalue(), session=_session)
     del buf
 
     no_bg = Image.open(io.BytesIO(output_bytes)).convert("RGBA")
