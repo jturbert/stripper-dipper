@@ -4,8 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       url:
-        description: "Manufacturer product page URL"
-        required: true
+        description: "Manufacturer product page URL (leave blank if using a PDF)"
+        required: false
+        type: string
+      pdf_path:
+        description: "Path to PDF in repo, e.g. pdfs/bathys.pdf (leave blank if using a URL)"
+        required: false
         type: string
 
 env:
@@ -49,6 +53,7 @@ jobs:
       - name: Process images
         env:
           PRODUCT_URL: ${{ inputs.url }}
+          PDF_PATH: ${{ inputs.pdf_path }}
         run: python images_only.py
 
       - name: Read product slug

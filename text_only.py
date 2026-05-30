@@ -4,7 +4,8 @@ Generate description and spec tables only — no image processing.
 
 Usage:
     python text_only.py <url>
-    python text_only.py        # reads PRODUCT_URL env var or prompts
+    python text_only.py <path/to/file.pdf>
+    python text_only.py   # reads PRODUCT_URL or PDF_PATH env var, or prompts
 """
 
 import asyncio
@@ -14,24 +15,43 @@ from pathlib import Path
 
 from generator import generate_description, generate_spec_tables
 from image_processor import slugify
+from pdf_reader import read_pdf
 from pipeline import _wrap_html
 from scraper import scrape_product_page
 
 
 async def main():
+    url = None
+    pdf_path = None
+
     if len(sys.argv) > 1:
-        url = sys.argv[1].strip()
+        arg = sys.argv[1].strip()
+        if arg.lower().endswith(".pdf"):
+            pdf_path = arg
+        else:
+            url = arg
+    elif os.environ.get("PDF_PATH"):
+        pdf_path = os.environ["PDF_PATH"].strip()
     elif os.environ.get("PRODUCT_URL"):
         url = os.environ["PRODUCT_URL"].strip()
     else:
-        url = input("Product page URL: ").strip()
+        val = input("Product page URL or path to PDF: ").strip()
+        if val.lower().endswith(".pdf"):
+            pdf_path = val
+        else:
+            url = val
 
-    if not url.startswith("http"):
-        print("Error: Please provide a full URL starting with http:// or https://")
+    if not pdf_path and (not url or not url.startswith("http")):
+        print("Error: Please provide a full URL (http://...) or a path to a PDF file.")
         sys.exit(1)
 
-    print(f"Scraping {url} ...")
-    product = await scrape_product_page(url)
+    if pdf_path:
+        print(f"Reading PDF: {pdf_path} ...")
+        product = read_pdf(pdf_path)
+    else:
+        print(f"Scraping {url} ...")
+        product = await scrape_product_page(url)
+
     print(f"Found: {product['name']}")
 
     slug = slugify(product["name"])

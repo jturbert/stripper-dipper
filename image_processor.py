@@ -92,6 +92,58 @@ def process_image(raw_bytes: bytes) -> Image.Image:
     return canvas
 
 
+def process_images_from_bytes(
+    image_bytes_list: list[bytes],
+    product_name: str,
+    output_dir: Path,
+    on_progress=None,
+    *,
+    max_images: int = 50,
+) -> list[Path]:
+    """Process pre-downloaded image bytes (e.g. extracted from a PDF)."""
+    log = on_progress or print
+
+    images_dir = output_dir / "images"
+    images_dir.mkdir(parents=True, exist_ok=True)
+
+    slug = slugify(product_name)
+    saved: list[Path] = []
+    count = 0
+
+    for raw in image_bytes_list:
+        if count >= max_images:
+            break
+
+        try:
+            Image.open(io.BytesIO(raw)).verify()
+        except Exception:
+            continue
+
+        log(f"Removing background from image {count + 1}...")
+        try:
+            processed = process_image(raw)
+        except Exception as e:
+            log(f"[warn] Background removal failed: {e}. Saving original.")
+            try:
+                processed = Image.open(io.BytesIO(raw)).convert("RGBA")
+            except Exception:
+                continue
+        finally:
+            gc.collect()
+
+        filename = f"{slug}-{count + 1:02d}.png"
+        out_path = images_dir / filename
+        processed.save(out_path, "PNG", optimize=True)
+        del processed
+        gc.collect()
+
+        saved.append(out_path)
+        count += 1
+        log(f"Saved: {filename}")
+
+    return saved
+
+
 def process_images(
     image_urls: list[str],
     product_name: str,

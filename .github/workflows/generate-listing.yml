@@ -4,8 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       url:
-        description: "Manufacturer product page URL"
-        required: true
+        description: "Manufacturer product page URL (leave blank if using a PDF)"
+        required: false
+        type: string
+      pdf_path:
+        description: "Path to PDF in repo, e.g. pdfs/bathys.pdf (leave blank if using a URL)"
+        required: false
         type: string
 
 env:
@@ -52,8 +56,8 @@ jobs:
       - name: Generate product listing
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          # URL is passed via env var (not shell interpolation) to avoid injection
           PRODUCT_URL: ${{ inputs.url }}
+          PDF_PATH: ${{ inputs.pdf_path }}
         run: python main.py
 
       - name: Read product slug

@@ -11,7 +11,8 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from generator import generate_description, generate_spec_tables
-from image_processor import process_images, slugify
+from image_processor import process_images, process_images_from_bytes, slugify
+from pdf_reader import read_pdf
 from scraper import scrape_product_page
 
 
@@ -26,22 +27,30 @@ def _wrap_html(table_html: str, title: str) -> str:
 """
 
 
-async def run_pipeline(url: str, log, *, max_images: int = 5) -> dict:
+async def run_pipeline(url: str, log, *, max_images: int = 5, pdf_path: str | None = None) -> dict:
     loop = asyncio.get_running_loop()
 
     # thread_log: safe to call from worker threads spawned by to_thread
     def thread_log(msg: str) -> None:
         loop.call_soon_threadsafe(log, msg)
 
-    # ---------------------------------------------------------------- scrape
-    log(f"Scraping {url} ...")
-    try:
-        product = await scrape_product_page(url)
-    except RuntimeError as e:
-        raise RuntimeError(f"Scraping failed: {e}") from e
-
-    log(f"Found: {product['name']}")
-    log(f"Specs: {len(product['specs'])}   Images: {len(product['image_urls'])}")
+    # ---------------------------------------------------------------- scrape / read PDF
+    if pdf_path:
+        log(f"Reading PDF: {pdf_path} ...")
+        try:
+            product = await asyncio.to_thread(read_pdf, pdf_path)
+        except RuntimeError as e:
+            raise RuntimeError(f"PDF reading failed: {e}") from e
+        log(f"Found: {product['name']}")
+        log(f"Specs: {len(product['specs'])}   Embedded images: {len(product['raw_image_bytes'])}")
+    else:
+        log(f"Scraping {url} ...")
+        try:
+            product = await scrape_product_page(url)
+        except RuntimeError as e:
+            raise RuntimeError(f"Scraping failed: {e}") from e
+        log(f"Found: {product['name']}")
+        log(f"Specs: {len(product['specs'])}   Images: {len(product['image_urls'])}")
 
     # ------------------------------------------------------ output directory
     slug = slugify(product["name"])
@@ -82,7 +91,19 @@ async def run_pipeline(url: str, log, *, max_images: int = 5) -> dict:
 
     # -------------------------------------------------------- process images
     saved_paths: list[Path] = []
-    if product["image_urls"]:
+    if product.get("raw_image_bytes"):
+        n = min(len(product["raw_image_bytes"]), max_images)
+        log(f"Processing {n} embedded image(s) from PDF ...")
+        saved_paths = await asyncio.to_thread(
+            process_images_from_bytes,
+            product["raw_image_bytes"],
+            product["name"],
+            output_dir,
+            on_progress=thread_log,
+            max_images=max_images,
+        )
+        log(f"Images done. {len(saved_paths)} saved.")
+    elif product["image_urls"]:
         n = min(len(product["image_urls"]), max_images)
         log(f"Processing {n} image(s) ...")
         saved_paths = await asyncio.to_thread(
@@ -95,7 +116,7 @@ async def run_pipeline(url: str, log, *, max_images: int = 5) -> dict:
         )
         log(f"Images done. {len(saved_paths)} saved.")
     else:
-        log("No images found on page.")
+        log("No images found.")
 
     log("All done.")
     return {

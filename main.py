@@ -4,7 +4,7 @@ Product Listing Automation — CLI entry point.
 
 Usage:
     python main.py <url>
-    python main.py        # prompts for URL
+    python main.py        # reads PRODUCT_URL or PDF_PATH env var, or prompts
 """
 
 import asyncio
@@ -15,25 +15,37 @@ from pipeline import run_pipeline
 
 
 def main():
+    url = None
+    pdf_path = None
+
     if len(sys.argv) > 1:
-        url = sys.argv[1].strip()
+        arg = sys.argv[1].strip()
+        if arg.lower().endswith(".pdf"):
+            pdf_path = arg
+        else:
+            url = arg
+    elif os.environ.get("PDF_PATH"):
+        pdf_path = os.environ["PDF_PATH"].strip()
     elif os.environ.get("PRODUCT_URL"):
         url = os.environ["PRODUCT_URL"].strip()
     else:
-        url = input("Product page URL: ").strip()
+        val = input("Product page URL or path to PDF: ").strip()
+        if val.lower().endswith(".pdf"):
+            pdf_path = val
+        else:
+            url = val
 
-    if not url.startswith("http"):
-        print("Error: Please provide a full URL starting with http:// or https://")
+    if not pdf_path and (not url or not url.startswith("http")):
+        print("Error: Please provide a full URL (http://...) or a path to a PDF file.")
         sys.exit(1)
 
     print()
     try:
-        results = asyncio.run(run_pipeline(url, print, max_images=50))
+        results = asyncio.run(run_pipeline(url or "", print, max_images=50, pdf_path=pdf_path))
     except RuntimeError as e:
         print(f"Error: {e}")
         sys.exit(1)
 
-    # Write slug to file so GitHub Actions can use it for the artifact name
     with open("product_slug.txt", "w") as f:
         f.write(results["slug"])
 
