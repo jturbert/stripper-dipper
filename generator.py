@@ -72,7 +72,7 @@ Specifications:
 
 def generate_description(product_data: dict) -> tuple[str, str]:
     """Returns (description, meta_description)."""
-    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"], max_retries=4)
 
     user_content = f"""Product Name: {product_data['name']}
 
@@ -98,7 +98,7 @@ Additional page content:
 
 
 def generate_spec_tables(product_data: dict) -> tuple[str, str]:
-    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"], max_retries=4)
 
     if product_data["specs"]:
         specs_text = "\n".join(

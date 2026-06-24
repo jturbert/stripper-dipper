@@ -5,7 +5,7 @@ Returns structured product data: name, description, specs, image URLs.
 
 import re
 import asyncio
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin, urlparse, urlunparse
 from playwright.async_api import async_playwright
 
 
@@ -258,9 +258,28 @@ async def _extract_images(page, base_url: str) -> list[str]:
     except Exception:
         pass
 
+    # Resolve WordPress thumbnails to originals (strip -WxH size suffix)
+    all_images = [_resolve_wp_thumbnail(u) for u in all_images]
+    # Re-deduplicate after resolution
+    seen_resolved: set[str] = set()
+    deduped: list[str] = []
+    for u in all_images:
+        if u not in seen_resolved:
+            seen_resolved.add(u)
+            deduped.append(u)
+    all_images = deduped
+
     # Prefer same-domain images with product-related path segments
     product_images = [
         u for u in all_images
-        if domain in u and any(k in u.lower() for k in ("product", "shop", "item", "catalog", "cdn"))
+        if domain in u and any(k in u.lower() for k in (
+            "product", "shop", "item", "catalog", "cdn", "uploads"
+        ))
     ]
     return product_images if len(product_images) >= 2 else all_images
+
+
+def _resolve_wp_thumbnail(url: str) -> str:
+    """Convert a WordPress thumbnail URL to its original by stripping the -WxH suffix."""
+    # Matches e.g. image-300x200.jpg -> image.jpg
+    return re.sub(r"-\d+x\d+(\.[a-zA-Z]+)$", r"\1", url)
