@@ -5,7 +5,7 @@ Returns structured product data: name, description, specs, image URLs.
 
 import re
 import asyncio
-from urllib.parse import urljoin, urlparse, urlunparse
+from urllib.parse import urljoin, urlparse
 from playwright.async_api import async_playwright
 
 

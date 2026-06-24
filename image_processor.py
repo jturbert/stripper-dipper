@@ -4,6 +4,7 @@ Downloads product images, removes backgrounds, pads to square, saves as PNG.
 
 import gc
 import io
+import logging
 import re
 import urllib.request
 import urllib.error
@@ -51,7 +52,7 @@ def download_image(url: str) -> bytes | None:
         with urllib.request.urlopen(req, timeout=30) as resp:
             return resp.read()
     except (urllib.error.URLError, urllib.error.HTTPError) as e:
-        print(f"  [warn] Could not download {url}: {e}")
+        logging.warning("Could not download %s: %s", url, e)
         return None
 
 
@@ -116,7 +117,8 @@ def process_images_from_bytes(
 
         try:
             Image.open(io.BytesIO(raw)).verify()
-        except Exception:
+        except Exception as e:
+            logging.debug("Skipping invalid image bytes: %s", e)
             continue
 
         log(f"Removing background from image {count + 1}...")
@@ -126,7 +128,8 @@ def process_images_from_bytes(
             log(f"[warn] Background removal failed: {e}. Saving original.")
             try:
                 processed = Image.open(io.BytesIO(raw)).convert("RGBA")
-            except Exception:
+            except Exception as e2:
+                logging.warning("Could not open image as fallback: %s", e2)
                 continue
         finally:
             gc.collect()
@@ -173,8 +176,8 @@ def process_images(
 
         try:
             Image.open(io.BytesIO(raw)).verify()
-        except Exception:
-            log("[warn] Not a valid image, skipping.")
+        except Exception as e:
+            log(f"[warn] Not a valid image, skipping: {e}")
             continue
 
         log(f"Removing background from image {count + 1}...")

@@ -16,7 +16,7 @@ from pdf_reader import read_pdf
 from scraper import scrape_product_page
 
 
-def _wrap_html(table_html: str, title: str) -> str:
+def wrap_html(table_html: str, title: str) -> str:
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><title>{title}</title></head>
@@ -83,10 +83,10 @@ async def run_pipeline(url: str, log, *, max_images: int = 5, pdf_path: str | No
         encoding="utf-8",
     )
     (output_dir / "specs-shopify.html").write_text(
-        _wrap_html(shopify_html, "Shopify Specs"), encoding="utf-8"
+        wrap_html(shopify_html, "Shopify Specs"), encoding="utf-8"
     )
     (output_dir / "specs-mailchimp.html").write_text(
-        _wrap_html(mailchimp_html, "Mailchimp Specs"), encoding="utf-8"
+        wrap_html(mailchimp_html, "Mailchimp Specs"), encoding="utf-8"
     )
 
     # -------------------------------------------------------- process images

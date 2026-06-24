@@ -5,6 +5,7 @@ Returns the same dict structure as scraper.py so the rest of the pipeline works 
 Embedded images are returned as raw bytes in the 'raw_image_bytes' key.
 """
 
+import logging
 import re
 from pathlib import Path
 
@@ -49,7 +50,8 @@ def read_pdf(pdf_path: str) -> dict:
                 data = img.data
                 if data and len(data) > 1024:  # skip tiny icons
                     image_bytes_list.append(data)
-            except Exception:
+            except Exception as e:
+                logging.debug("Skipping PDF image: %s", e)
                 continue
 
     # ------------------------------------------------ product name
@@ -69,7 +71,7 @@ def read_pdf(pdf_path: str) -> dict:
     # ------------------------------------------------ raw text (capped for API)
     raw_text_capped = re.sub(r"\n{3,}", "\n\n", raw_text).strip()[:8000]
 
-    print(f"PDF: {len(lines)} text lines, {len(specs)} spec rows, {len(image_bytes_list)} images")
+    logging.info("PDF: %d text lines, %d spec rows, %d images", len(lines), len(specs), len(image_bytes_list))
 
     return {
         "name": name,
